@@ -9,6 +9,8 @@ Freezer thermometer
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 
+#define DEBUG 1
+
 // These #defines make it easy to set the backlight color
 #define RED 0x1
 #define YELLOW 0x3
@@ -26,7 +28,7 @@ Freezer thermometer
 // negative temperatures
 int tempPin = 1;
 int tempReading;
-int delayVal = 5*60*1000;    // delay interval before reading the TMP36 in ms
+int delayVal = 60*5*1000;    // delay interval before reading the TMP36 in ms
 float voltage;
 float temperatureC;
 
@@ -36,7 +38,7 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 void setup() {
   
   // Debugging output
-  // Serial.begin(9600);
+  Serial.begin(9600);
 
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
@@ -51,8 +53,15 @@ void loop(void) {
   tempReading = analogRead(tempPin);
   // converting that reading to voltage, which is based off the reference voltage
   voltage = (tempReading * aref_voltage)/1024.0;
+#ifdef DEBUG
+  Serial.print("Temp reading = ");
+  Serial.print(tempReading);
+  // print out the voltage
+  Serial.print(" - ");
+  Serial.print(voltage); Serial.println(" volts");
+#endif
   // now calculate the temperature from the measured voltage
-  temperatureC = (voltage - 0.5) * 100 ;  //converting from 10 mv per degree wit 500 mV offset
+  temperatureC = (voltage - 0.5) * 100 ;  //converting from 10 mv per degree with 500 mV offset
   //to degrees ((volatge - 500mV) times 100)
 
   // Display the current temperature on the second line of LCD display
