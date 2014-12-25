@@ -28,20 +28,18 @@ Freezer thermometer
 // resolution is 10 mV/deg C with a 500 mV offset to allow for
 // negative temperatures
 int tempPin = 1;
-int tempReading;
 unsigned long sleepTime = 60*1000;    // delay interval before reading the TMP36 in ms
 unsigned long dispTime = 30*1000;     // sleep interval
-float voltage;
-float temperatureC;
+float currTemp;
 float minTemp;
 float maxTemp;
+int buttons;
 int i;
 
 // Get an LCD object
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 void setup() {
-  
   // Debugging output
   Serial.begin(9600);
 
@@ -50,14 +48,17 @@ void setup() {
   // If you want to set the aref to something other than 5v
   analogReference(EXTERNAL);
 
-  lcd.print("Current temp: ");
-  lcd.setBacklight(WHITE);
+  lcd.setBacklight(BLACK);
   
   minTemp = (((analogRead(tempPin) * aref_voltage)/1024.0) - 0.5)*100;
   maxTemp = minTemp;
 }
 
-void loop(void) {
+float getTemp() {
+  int tempReading;
+  float voltage;
+  float temperatureC;
+
   // Read the pin 5 times with a 100 ms delay between each reading and average them together
   tempReading = 0;
   for (i=0; i<5; i++) {
@@ -73,32 +74,47 @@ void loop(void) {
   temperatureC = (voltage - 0.5) * 100;  //converting from 10 mv per degree with 500 mV offset
   //to degrees ((volatge - 500mV) times 100)
 
-  if (tempReading < minTemp) minTemp = temperatureC;
-  if (tempReading > maxTemp) maxTemp = temperatureC;
-  
-#ifdef DEBUG
-  Serial.print("Temp reading = ");
-  Serial.print(tempReading);
-  // print out the voltage
-  Serial.print(" - ");
-  Serial.print(voltage,4); Serial.println(" volts");
-  Serial.print("Max value = ");
-  Serial.println(maxTemp);
-  Serial.print("Min value = ");
-  Serial.println(minTemp);
-#endif
+  #ifdef DEBUG
+    Serial.print("Temp reading = ");
+    Serial.print(tempReading);
+    // print out the voltage
+    Serial.print(" - ");
+    Serial.print(voltage,4); Serial.println(" volts");
+    Serial.print("Max value = ");
+    Serial.println(maxTemp);
+    Serial.print("Min value = ");
+    Serial.println(minTemp);
+  #endif
 
-  // Turn the screen on
+  return temperatureC;
+}
+
+void showTemp() {
+  // Turn the LCD on
   lcd.setBacklight(WHITE);    // Set display colour to white
   lcd.display();
   // Display the current temperature on the second line of LCD display
+  lcd.print("Temp: ");
+  lcd.print(currTemp);
+  lcd.print(" C");
   lcd.setCursor(0, 1);
-  lcd.print(temperatureC);
-  lcd.print(" degC");
+  lcd.print("Rng: ");
+  lcd.print(minTemp,1);
+  lcd.print("-");
+  lcd.print(maxTemp,1);
+}
 
-  delay(dispTime);            // Leave the display on for 30 seconds
-  lcd.noDisplay();            // Turn the display off
-  lcd.setBacklight(BLACK);    // turn the backlight off 
-  delay(sleepTime);           // Wait sleepTime seconds for the next measurement
+void loop(void) {
+  if (buttons = lcd.readButtons()) {
+    if (buttons & BUTTON_SELECT) {
+      currTemp = getTemp();
+      if (currTemp < minTemp) minTemp = currTemp;
+      if (currTemp > maxTemp) maxTemp = currTemp;
+      showTemp();
+      delay(dispTime);            // Leave the display on for 30 seconds
+      lcd.noDisplay();            // Turn the display off
+      lcd.setBacklight(BLACK);    // turn the backlight off 
+    }
+  }
 }
 
