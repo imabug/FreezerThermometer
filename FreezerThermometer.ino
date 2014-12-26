@@ -28,20 +28,19 @@ Freezer thermometer
 // resolution is 10 mV/deg C with a 500 mV offset to allow for
 // negative temperatures
 int tempPin = 1;
-unsigned long sleepTime = 60*1000;    // delay interval before reading the TMP36 in ms
-unsigned long dispTime = 30*1000;     // sleep interval
+unsigned long dispTime = 30*1000;     // time to leave the LCD on for
+unsigned long prevMillis = 0;
 float currTemp;
 float minTemp;
 float maxTemp;
 int buttons;
-int i;
 
 // Get an LCD object
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 void setup() {
   // Debugging output
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
@@ -58,7 +57,8 @@ float getTemp() {
   int tempReading;
   float voltage;
   float temperatureC;
-
+  int i;
+  
   // Read the pin 5 times with a 100 ms delay between each reading and average them together
   tempReading = 0;
   for (i=0; i<5; i++) {
@@ -89,32 +89,41 @@ float getTemp() {
   return temperatureC;
 }
 
-void showTemp() {
+void showTemp(float t1, float t2, float t3) {
   // Turn the LCD on
   lcd.setBacklight(WHITE);    // Set display colour to white
   lcd.display();
-  // Display the current temperature on the second line of LCD display
+
+  // Display the current temp on the first line
+  lcd.setCursor(0,0);
   lcd.print("Temp: ");
-  lcd.print(currTemp);
+  lcd.print(t1);
   lcd.print(" C");
+  
+  // Display the temp range on the second line
   lcd.setCursor(0, 1);
   lcd.print("Rng: ");
-  lcd.print(minTemp,1);
+  lcd.print(t2,1);
   lcd.print("-");
-  lcd.print(maxTemp,1);
+  lcd.print(t3,1);
 }
 
 void loop(void) {
+  unsigned long currMillis;
+  
   if (buttons = lcd.readButtons()) {
     if (buttons & BUTTON_SELECT) {
       currTemp = getTemp();
       if (currTemp < minTemp) minTemp = currTemp;
       if (currTemp > maxTemp) maxTemp = currTemp;
-      showTemp();
-      delay(dispTime);            // Leave the display on for 30 seconds
-      lcd.noDisplay();            // Turn the display off
-      lcd.setBacklight(BLACK);    // turn the backlight off 
+      showTemp(currTemp, minTemp, maxTemp);
     }
+  }
+  currMillis = millis();      
+  if ((currMillis - prevMillis) > dispTime) {
+    prevMillis = currMillis;
+    lcd.noDisplay();            // Turn the display off
+    lcd.setBacklight(BLACK);    // turn the backlight off 
   }
 }
 
