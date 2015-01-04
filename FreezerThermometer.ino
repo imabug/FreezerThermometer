@@ -2,6 +2,7 @@
 Freezer thermometer
  Uses an Analog Devices TMP36 temperature sensor and displays
  the current temperature on an Adafruit RGB LCD shield
+ Resolution is 10 mV/deg C with a 500 mV offset to allow for negative temperatures
 */
 
 // include the library code:
@@ -22,23 +23,20 @@ Freezer thermometer
 #define WHITE 0x7
 
 // For the TMP36 temperature sensor
-#define aref_voltage 3.3         // we tie 3.3V to ARef and measure it with a multimeter!
+#define aref_voltage 3.3         // we tie 3.3V to ARef
 
-// analog pin for the TMP36 Vout pin
-// resolution is 10 mV/deg C with a 500 mV offset to allow for
-// negative temperatures
-int tempPin = 1;
-unsigned long dispTime = 30*1000;     // time to leave the LCD on for
-unsigned long prevMillis = 0;
-int tempInterval = 1;    // Time interval between readings
-float currTemp = 0;
-float minTemp = 0;
-float maxTemp = 0;
-float hiAlertTemp = -10.0;
-float loAlertTemp = -25.0;
-float tempHistory[10]
-uint8_t buttons;
+byte tempPin = 1;    // analog pin for the TMP36 Vout pin
+float currTemp = 0.0;
+float minTemp = 0.0;
+float maxTemp = 0.0;
+float hiTempAlert = -10.0;
+float lowTempAlert = -25.0;
 // Create arrays for 5 timers
+// timer[0] - time interval between reading the thermometer
+// timer[1] - Unused
+// timer[2] - Unused
+// timer[3] - Unused
+// timer[4] - Unused
 unsigned long timer[5];
 byte timerState[5];
 
@@ -49,15 +47,77 @@ void setup() {
   // Debugging output
   Serial.begin(115200);
 
-  // set up the LCD's number of columns and rows: 
-  lcd.begin(16, 2);
   // If you want to set the aref to something other than 5v
   analogReference(EXTERNAL);
 
+  // set up the LCD's number of columns and rows: 
+  lcd.begin(16, 2);
   lcd.setBacklight(BLACK);
   
   minTemp = (((analogRead(tempPin) * aref_voltage)/1024.0) - 0.5)*100;
   maxTemp = minTemp;
+}
+
+void loop(void) {  
+  uint8_t buttons;
+  int tempInterval = 1;    // Time interval between readings
+
+  buttons = lcd.readButtons();
+  if (buttons & BUTTON_SELECT) {
+    // Activate the display and show the current temperature reading
+    currTemp = getTemp();
+    if (currTemp < minTemp) minTemp = currTemp;
+    if (currTemp > maxTemp) maxTemp = currTemp;
+    showTemp(currTemp, minTemp, maxTemp);
+  }
+  if (buttons & BUTTON_UP) {
+    // Set high alert temp using the up/down buttons
+    // Turn the LCD on
+    lcd.setBacklight(WHITE);    // Set display colour to white
+    lcd.display();
+    lcd.setCursor(0,0);
+    lcd.print("Hi Temp Alert");
+    lcd.setCursor(0,1);
+    lcd.print(hiTempAlert);    // Display the current hi temp alert
+    lcd.print(" C");
+    hiTempAlert = setAlert(hiTempAlert);
+  }
+  if (buttons & BUTTON_DOWN) {
+    // Turn the LCD on
+    lcd.setBacklight(WHITE);    // Set display colour to white
+    lcd.display();
+    // Set low alert temp using the up/down buttons
+    lcd.setCursor(0,0);
+    lcd.print("Low Temp Alert");
+    lcd.setCursor(0,1);
+    lcd.print(lowTempAlert);    // Display the current low temp alert
+    lcd.print(" C");
+    lowTempAlert = setAlert(lowTempAlert);
+  }
+  if (buttons & BUTTON_LEFT) {
+    // Use left button to adjust temperature sampling interval
+    lcd.setBacklight(WHITE);
+    lcd.display();
+    lcd.setCursor(0,0);
+    lcd.print("Sample Interval");
+    lcd.setCursor(0,1);
+    lcd.print(tempInterval);
+    lcd.print(" min");
+    tempInterval = setInterval(tempInterval);
+  }
+
+  // Use Timer 0 for the temperature sampling interv
+  if (delayMinutes(0,tempInterval)) {
+    currTemp = getTemp();    // Get a temperature reading every tempInterval minutes
+    if (currTemp < minTemp) minTemp = currTemp;
+    if (currTemp > maxTemp) maxTemp = currTemp;
+    if ((currTemp > hiTempAlert) || (currTemp < lowTempAlert)) {
+      lcd.setBacklight(RED);
+      showTemp(currTemp, minTemp, maxTemp);
+    }
+//    lcd.noDisplay();            // Turn the display off
+//    lcd.setBacklight(BLACK);    // turn the backlight off 
+  }
 }
 
 float getTemp() {
@@ -113,39 +173,36 @@ void showTemp(float t1, float t2, float t3) {
   lcd.print(t2,1);
   lcd.print("-");
   lcd.print(t3,1);
+  
+  return;
 }
 
-void loop(void) {  
-  unsigned long currMillis = millis();
-  
-  if (buttons = lcd.readButtons()) {
-    if (buttons & BUTTON_SELECT) {
-      currTemp = getTemp();
-      if (currTemp < minTemp) minTemp = currTemp;
-      if (currTemp > maxTemp) maxTemp = currTemp;
-      showTemp(currTemp, minTemp, maxTemp);
-    }
-    if (buttons & BUTTON_UP) {
-      // Set high alert temp using the up/down buttons
-    }
-    if (buttons & BUTTON_DOWN) {
-      // Set low alert temp using the up/down buttons
-    }
-    if ((buttons & BUTTON_LEFT) || (buttons & BUTTON_RIGHT)) {
-      // Scroll through temperature history
-    }
-  }
+float setAlert(float alertTemp) {
+  uint8_t buttons;
 
-  if (delayMinutes(0,1)) {
-    currTemp = getTemp();    // Get a temperature reading every minute
-    if (currTemp < minTemp) minTemp = currTemp;
-    if (currTemp > maxTemp) maxTemp = currTemp;
-    if (currTemp > hiAlertTemp) {
-      lcd.setBacklight(RED);
-    }
-//    lcd.noDisplay();            // Turn the display off
-//    lcd.setBacklight(BLACK);    // turn the backlight off 
+  buttons = lcd.readButtons();
+  while (!(buttons & BUTTON_SELECT)) {
+    if (buttons & BUTTON_UP) alertTemp++;
+    if (buttons & BUTTON_DOWN) alertTemp--;
+    lcd.setCursor(0,1);
+    lcd.print(alertTemp);
+    lcd.print(" C");
   }
+  return alertTemp;
+}
+
+int setInterval(int interval) {
+  uint8_t buttons;
+
+  buttons = lcd.readButtons();
+  while (!(buttons & BUTTON_SELECT)) {
+    if (buttons & BUTTON_UP) interval++;
+    if (buttons & BUTTON_DOWN) interval--;
+    lcd.setCursor(0,1);
+    lcd.print(interval);
+    lcd.print(" min");
+  }
+  return interval;
 }
 
 /*  Delay without "delay()"
@@ -155,15 +212,15 @@ void loop(void) {
  */
 int delayHours(byte timerNumber,unsigned long delaytimeH){    
   //Here we make it easy to set a delay in Hours
-  delayMilliSeconds(timerNumber,delaytimeH*1000*60*60);
+  return delayMilliSeconds(timerNumber,delaytimeH*1000*60*60);
 }
 int delayMinutes(byte timerNumber,unsigned long delaytimeM){    
   //Here we make it easy to set a delay in Minutes
-  delayMilliSeconds(timerNumber,delaytimeM*1000*60);
+  return delayMilliSeconds(timerNumber,delaytimeM*1000*60);
 }
 int delaySeconds(byte timerNumber,unsigned long delaytimeS){    
   //Here we make it easy to set a delay in Seconds
-  delayMilliSeconds(timerNumber,delaytimeS*1000);
+  return delayMilliSeconds(timerNumber,delaytimeS*1000);
 }
 
 int delayMilliSeconds(int timerNumber,unsigned long delaytime){
@@ -179,14 +236,14 @@ int delayMilliSeconds(int timerNumber,unsigned long delaytime){
   else{
     timeTaken=millis()+2+(4294967295-timer[timerNumber]);    //if the timer rolled over (more than 48 days passed)then this line accounts for that
   }
-  if (timeTaken>=delaytime) {          
+  if (timeTaken>=delaytime) {
     //here we make it easy to wrap the code we want to time in an "IF" statement, if not then it isn't and so doesn't get run.
      timerState[timerNumber]=0;  //once enough time has passed the timer is marked reset.
-     return 1;                          //if enough time has passed the "IF" statement is true
+     return true;                          //if enough time has passed the "IF" statement is true
   }
   else {                               
     //if enough time has not passed then the "if" statement will not be true.
-    return 0;
+    return false;
   }
 }
 
